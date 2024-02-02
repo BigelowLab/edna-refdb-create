@@ -1,0 +1,172 @@
+---
+title: "README"
+output: github_document
+---
+
+Creating fish-centric eDNA reference database using [fishbase](https://fishbase.se/home.htm) and [sealifebase](https://www.sealifebase.ca/) to select target fish, and [entrez](https://www.ncbi.nlm.nih.gov/Web/Search/entrezfs.html) to fetch FASTA files.
+
+## Requirements
+
+### From CRAN
+
+  + [R v4.1+] 
+  + [worrms]
+  + [readr] [
+  + [rfishbase]
+  + [dplyr]
+  + [here] 
+  + [remotes]
+  + [rentrez]
+  + [stringr]
+  + [argparser]
+  
+### From github
+
+  + [charlier]
+  
+## Installation
+
+Fork the repos, and then clone to you local machine.  Start R and use `setwd()` to navigate to the location of the downloaded repos.  Then do
+
+```{r}
+source("setup.R")
+```
+
+
+## Usage
+
+Here we show the basic steps for developing reference databases to be used, in this example, in the Northwest Atlantic region (aka `nwa`.)  
+
+### Read a configuration file
+
+Without going into the details (yet), load a configuration file, which is a just [text file](example/v0.000.yaml) in [YAML](https://www.cloudbees.com/blog/yaml-tutorial-everything-you-need-get-started) format.
+
+The configuration is an easy way to pass in complex operating instructions into a function.  We use one configuration for two different steps.
+
+```{r}
+cfg = read_configuration("example/v0.000.yaml")
+str(cfg)
+```
+
+### Species selection
+
+This step will query the [fishbase](https://fishbase.se/home.htm) and/or [sealifebase](https://www.sealifebase.ca/) databases for species.  These databases produce tables of data that we may want for future use, so they are written into a standard location inside a `data` diretcory that is created as needed.
+
+```{r}
+x = select_target_species(cfg) |>
+  glimpse()
+```
+
+If you look in you filebrowser in this directory you will see a new subdirectory called `data` and subfolders within. in `versions` you will find `v0/v0.000` which now contains a copy of the configuration and the selected species named by the region (in this case `nwa`.)
+
+
+### Species search for contigs
+
+We can then uses this listing of species of interest to fetch FASTA files (among other things) form [entrez](https://www.ncbi.nlm.nih.gov/Web/Search/entrezfs.html).  If you look closely at the configuration, copied below, you'll see that we do two different searches named `voucher` and `novoucher`.  Each is run independently, and the names can be anything you want (but we advise using underscore between words (*e.g.* `white_shark` instead of `white shark`)).
+
+```default
+entrez:
+  voucher:
+    search_modifier: '[ORGN] AND 12S[ALL] AND voucher[ALL]'
+    db_1: nucleotide
+    dump: yes
+    dump_separate: no
+  novoucher:
+    search_modifier: '[ORGN] AND 12S[ALL]'
+    db_2: nucleotide
+    dump: yes
+    dump_separate: no
+```
+
+The other bits are explained below in the section on configuration.  When we run the search function, [entrez](https://www.ncbi.nlm.nih.gov/Web/Search/entrezfs.html) is queried using the search modifier and database specified.  It returns one table per requested search.
+
+```{r}
+x = search_target_species(cfg)
+x
+```
+
+
+## The configuration
+
+```default
+version: v0.000                                             # the version please use xxx.yyy style
+rootpath: /mnt/s1/projects/...                              # the directory to your work
+region: nwa                                                 # name of yoru region/grouping
+preselect_filename: example/SpeciesList_UpdatedNames.csv    # if you have one, otherwise make it ~
+preselect_column: ScientificName_accepted                   # preselect: the name of the column in the file
+groups:                                   # preselect: grouping labels
+  fish:
+  - Actinopterygii
+  - Elasmobranchii
+default_label: nonfish                    # preselect: name for the unchosen
+lazy_database: yes                        # OK to use existing database files? or better to fetch new?
+fishbase:                                 # making a fishbase query?
+  country:                                # query type
+    country:                              # look for these outputs
+    - USA
+    - Canada
+    - Greenland
+  distribution:                           # query type?
+    FAO:                                  # look for these outputs  
+    - Atlantic, Northwest
+    - Atlantic, Western Central
+    - America, North - Inland waters
+    - Arctic Ocean
+  ecosystem:                              # query type?
+    EcosystemName:                        # look for these outputs
+    - Arctic
+    - Arctic Complex
+    - Atlantic Complex
+    - Atlantic Ocean
+    - Canadian Eastern Arctic - West Greenland
+    - Canadian High Arctic - North Greenland
+    - Chesapeake Bay
+    - Gulf of Maine
+    - Hudson Bay Complex
+    - Hudson Complex
+    - Labrador - Newfoundland
+    - Northeast U.S. Continental Shelf
+    - St. Lawrence Complex
+    - St. Lawrence
+    - West Greenland Shelf
+#sealifebase:                             # you can do the same with sealifebase
+#  country:                               # or pick other query types
+#    country:
+#    - USA
+#    - Canada
+#    - Greenland
+#  distribution:
+#    FAO:
+#    - Atlantic, Northwest
+#    - Atlantic, Western Central
+#    - America, North - Inland waters
+#    - Arctic Ocean
+#  ecosystem:
+#    EcosystemName:
+#    - Arctic
+#    - Arctic Complex
+#    - Atlantic Complex
+#    - Atlantic Ocean
+#    - Canadian Eastern Arctic - West Greenland
+#    - Canadian High Arctic - North Greenland
+#    - Chesapeake Bay
+#    - Gulf of Maine
+#    - Hudson Bay Complex
+#    - Hudson Complex
+#    - Labrador - Newfoundland
+#    - Northeast U.S. Continental Shelf
+#    - St. Lawrence Complex
+#    - St. Lawrence
+#    - West Greenland Shelf
+entrez:                                     
+  voucher:
+    search_modifier: '[ORGN] AND 12S[ALL] AND voucher[ALL]'
+    db: nucleotide
+    dump: yes
+    dump_separate: no
+  novoucher:
+    search_modifier: '[ORGN] AND 12S[ALL]'
+    db: nucleotide
+    dump: yes
+    dump_separate: no
+```
